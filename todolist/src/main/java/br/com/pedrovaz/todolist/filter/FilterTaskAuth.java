@@ -22,40 +22,42 @@ public class FilterTaskAuth extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // Pegar a autentificação (user e senha)
+        var servletPath = request.getServletPath();
+       
+        if (servletPath.startsWith("/tasks/")) {
+            // Pegar a autentificação (user e senha)
+            var authorization = request.getHeader("Authorization");
+            var authEncoded = authorization.substring("Basic".length()).trim();
+            byte[] authDecode = Base64.getDecoder().decode(authEncoded);
 
-        var authorization = request.getHeader("Authorization");
-        var authEncoded = authorization.substring("Basic".length()).trim();
-        byte[] authDecode = Base64.getDecoder().decode(authEncoded);
-        var authString = new String(authDecode);
+            var authString = new String(authDecode);
 
-        // ["pedro", "12345"]
-        String[] credentials = authString.split(":");
-        String username = credentials[0];
-        String password = credentials[1];
-        System.out.println("Authorization");
-        System.out.println(username);
-        System.out.println(password);
+            // ["pedro", "12345"]
+            String[] credentials = authString.split(":");
+            String username = credentials[0];
+            String password = credentials[1];
 
-        // Validar usuario
+            // Validar usuario
+            var user = this.userRepository.findByUsername(username);
+            if (user == null) {
+                response.sendError(401);
+            } else {
+                // Validar senha
+                var passwordVerify = BCrypt.verifyer().verify(password.toCharArray(), user.getPassword());
+                if (passwordVerify.verified) {
 
-        var user = this.userRepository.findByUsername(username);
-        if (user == null) {
-            response.sendError(401);
-        }
+                    // Segue Viagem
+                    
+                    request.setAttribute("idUser", user.getId());
+                    filterChain.doFilter(request, response);
+                } else {
+                    response.sendError(401);
+                }
 
-        // Validar senha
-
-        var passwordVerify = BCrypt.verifyer().verify(password.toCharArray(), user.getPassword());
-        if (passwordVerify.verified) {
-            filterChain.doFilter(request, response);
+            }
         } else {
-            response.sendError(401);
+            filterChain.doFilter(request, response);
         }
-
-        // Segue Viagem
-
-        filterChain.doFilter(request, response);
     }
 
 }
